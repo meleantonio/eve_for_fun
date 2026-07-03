@@ -67,3 +67,32 @@ with cleared context, wasting tokens with no repo or saved content at the end.
   drafting; forbade publishing via the raw `github` connection; on error, retry the tool
   instead of regenerating the tutorial.
 - `npm run typecheck` passes.
+
+## Session: 2026-07-03 — Debug mode: root-cause the "fetch failed" session crash
+
+### User request
+Same "fetch failed" crash reproduced after the first round of fixes; debug with runtime
+evidence, then clean up instrumentation once fixed.
+
+### Diagnosis (runtime evidence)
+- Instrumented global fetch + process lifecycle in every Node process (agent.ts wrapper,
+  then a NODE_OPTIONS preload) and logged to a debug session file.
+- Found the eve dev server process was 2 hours old: Ctrl+C only killed the TUI client; new
+  `npm run dev` invocations re-attached to the same stale background server (port 2000),
+  which had 654 MB RSS and two orphaned 1 GB microsandbox VMs.
+- Final run's logs showed the real network failures: ECONNRESET on outbound MCP endpoints
+  (mcp.notion.com, mcp.linear.app) inside the eve dev process — transient upstream resets
+  that eve dev treated as fatal, ending the session and clearing context.
+- The GitHub publishing path was healthy after round-1 fixes: `publish_tutorial` succeeded
+  twice during debugging (repos `econ-ai-claude-goal-loop-econ-research`,
+  `econ-ai-goal-for-economic-research`).
+
+### Resolution
+- Killed the stale dev server and orphaned sandbox VMs; a fresh `npm run dev` completed the
+  tutorial run cleanly and the user confirmed the issue fixed.
+- Kept the round-1 hardening (inline GitHub spec, retries, save_draft checkpointing) —
+  it made crashed runs recoverable: the follow-up session republished from the draft.
+- Removed all debug instrumentation (agent.ts wrapper, preload script, tool log calls);
+  typecheck passes.
+- Note for the future: if "fetch failed" reappears, fully stop the stale dev server
+  (check `lsof -ti tcp:2000`) instead of only Ctrl+C-ing the TUI.
