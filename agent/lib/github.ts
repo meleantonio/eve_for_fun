@@ -1,5 +1,43 @@
 const GITHUB_API = "https://api.github.com";
 
+const FETCH_TIMEOUT_MS = 30_000;
+const MAX_RETRIES = 3;
+
+/**
+ * fetch with a timeout and retries on transient failures (network errors,
+ * 429, 5xx). A single dropped connection ("fetch failed") must not abort
+ * the whole publish step — that previously crashed the session and lost
+ * the tutorial content.
+ */
+async function githubFetch(url: string, init?: RequestInit): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+    }
+    try {
+      const res = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+        lastError = new Error(`GitHub API ${res.status}: ${await res.text()}`);
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw new Error(
+    `GitHub request failed after ${MAX_RETRIES + 1} attempts: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
+}
+
 function githubHeaders(token: string, contentType = "application/json") {
   return {
     Authorization: `Bearer ${token}`,
@@ -37,7 +75,7 @@ export function topicToRepoName(topic: string): string {
 
 export async function repoExists(owner: string, repo: string): Promise<boolean> {
   const token = getToken();
-  const res = await fetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
+  const res = await githubFetch(`${GITHUB_API}/repos/${owner}/${repo}`, {
     headers: githubHeaders(token, ""),
   });
   if (res.status === 404) {
@@ -56,7 +94,7 @@ export async function createRepo(args: {
   isPrivate?: boolean;
 }): Promise<{ html_url: string; full_name: string }> {
   const token = getToken();
-  const res = await fetch(`${GITHUB_API}/user/repos`, {
+  const res = await githubFetch(`${GITHUB_API}/user/repos`, {
     method: "POST",
     headers: githubHeaders(token),
     body: JSON.stringify({
@@ -109,7 +147,7 @@ export async function publishFileToGithub(args: PublishArgs) {
   const branch = args.branch ?? "main";
   const apiBase = `${GITHUB_API}/repos/${args.owner}/${args.repo}`;
 
-  const existing = await fetch(
+  const existing = await githubFetch(
     `${apiBase}/contents/${encodeURIComponent(args.path)}?ref=${branch}`,
     { headers: githubHeaders(token, "") },
   );
@@ -120,7 +158,7 @@ export async function publishFileToGithub(args: PublishArgs) {
     sha = data.sha;
   }
 
-  const res = await fetch(`${apiBase}/contents/${encodeURIComponent(args.path)}`, {
+  const res = await githubFetch(`${apiBase}/contents/${encodeURIComponent(args.path)}`, {
     method: "PUT",
     headers: githubHeaders(token),
     body: JSON.stringify({

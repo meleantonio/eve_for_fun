@@ -1,0 +1,69 @@
+# Cursor Chat Recording
+
+## Session: 2026-07-01 — Build Eve agent for AI tricks & economic research tutorials
+
+### User request
+Use the agents' docs at https://vercel.com/eve to build an eve agent that scans the web for new AI tricks that could be useful for economic research, and builds tutorials on my github account about how to use these tricks.
+
+### Agent actions
+- Researched Vercel Eve framework documentation (vercel.com/eve, eve.dev/docs)
+- Installed Node 24 via Homebrew (Eve requires Node >=24)
+- Ran `npx eve@latest init .` to scaffold project
+- Applied Econ AI Scout agent: instructions, GitHub connection, weekly schedule, skills, tools, subagents
+
+### Deploy to Vercel
+- User authenticated Vercel CLI as `meleantonio`
+- Linked project: `antonio-meles-projects/eve_for_fun`
+- Production deploy: https://eveforfun.vercel.app
+- Weekly cron registered; health check returns 200
+- Added `GITHUB_TOKEN` and `GITHUB_OWNER` to Vercel production; redeployed
+- Copied all project env vars into `.env.local` for local dev
+
+
+### Fix: Connector not found github/github (2026-07-02)
+- User reported eve error "Connector not found: github/github" despite GITHUB_TOKEN in `.env.local`
+- Root cause: `agent/connections/github.ts` used Vercel Connect (`connect({ connector: "github/github" })`), not `GITHUB_TOKEN`
+- Fix: switched connection auth to `getToken` reading `process.env.GITHUB_TOKEN` (same as `publish_tutorial`)
+
+## Session: 2026-07-03 — Update GITHUB PAT on Vercel
+
+### User request
+Add the new GitHub PAT token to Vercel environment variables.
+
+### Agent actions
+- Read new `GITHUB_TOKEN` from `.env.local` (fine-grained PAT for `meleantonio` account)
+- Updated Vercel project `antonio-meles-projects/eve_for_fun`:
+  - **Production**: `GITHUB_TOKEN` (sensitive) via `vercel env add`
+  - **Development**: `GITHUB_TOKEN` (encrypted) via `vercel env add`
+  - **Preview**: `GITHUB_TOKEN` (sensitive, all branches) via Vercel REST API (CLI preview bug workaround)
+- Verified all three environments have `GITHUB_TOKEN` configured
+
+## Session: 2026-07-03 — Fix agent crashing before pushing tutorials to GitHub
+
+### User request
+The agent keeps crashing before pushing the tutorial to GitHub, then starts a new session
+with cleared context, wasting tokens with no repo or saved content at the end.
+
+### Diagnosis
+- Dev terminal log showed the crash: `⨯ Error: fetch failed` right at publish time, followed
+  by "Session ended — started a new session. Earlier context was cleared."
+- Root cause 1: `agent/connections/github.ts` pointed at GitHub's full OpenAPI spec — a
+  12.6 MB runtime download with ~1000 operations. Fetching it is slow and fragile, and the
+  agent was hand-rolling publishing through it (base64 + create-or-update-file) instead of
+  using `publish_tutorial`.
+- Root cause 2: no retries/timeouts on GitHub API calls, so one transient network failure
+  killed the session.
+- Root cause 3: tutorial content lived only in model context, so a crash lost everything.
+
+### Fixes
+- `agent/connections/github.ts`: replaced the 12.6 MB remote spec with a minimal inline
+  OpenAPI spec (get user, get/update repo, get/put file contents, create issue).
+- `agent/lib/github.ts`: added `githubFetch` with a 30s timeout and up to 3 retries with
+  exponential backoff on network errors, 429, and 5xx; all GitHub calls now use it.
+- New tool `agent/tools/save_draft.ts`: checkpoints the finished draft to `.eve/drafts/`
+  (or `/tmp/eve-drafts` on Vercel) so content survives a crash.
+- `agent/tools/publish_tutorial.ts`: also checkpoints the draft to disk before pushing.
+- `agent/instructions.md`: mandated save_draft → publish_tutorial immediately after
+  drafting; forbade publishing via the raw `github` connection; on error, retry the tool
+  instead of regenerating the tutorial.
+- `npm run typecheck` passes.

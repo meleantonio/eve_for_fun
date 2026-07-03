@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import {
@@ -5,6 +8,19 @@ import {
   publishFileToGithub,
   topicToRepoName,
 } from "#lib/github.js";
+
+/** Best-effort local checkpoint so content survives a crash mid-publish. */
+async function checkpointDraft(repoName: string, body: string): Promise<void> {
+  try {
+    const dir = process.env.VERCEL
+      ? join(tmpdir(), "eve-drafts")
+      : join(process.cwd(), ".eve", "drafts");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, `${repoName}.md`), body);
+  } catch {
+    // Checkpointing must never block publishing.
+  }
+}
 
 export default defineTool({
   description:
@@ -25,14 +41,15 @@ export default defineTool({
   }),
   async execute({ topic, title, content, repo_description, commit_message }) {
     const repoName = topicToRepoName(topic);
+    const body = `# ${title}\n\n${content}`;
+    await checkpointDraft(repoName, body);
+
     const { owner, repo, created, url } = await ensureTopicRepo({
       topic,
       description:
         repo_description ??
         `Econ AI tutorial: ${title}`.slice(0, 350),
     });
-
-    const body = `# ${title}\n\n${content}`;
     const result = await publishFileToGithub({
       owner,
       repo,
