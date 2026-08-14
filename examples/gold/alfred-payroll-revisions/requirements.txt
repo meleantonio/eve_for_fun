@@ -1,0 +1,2 @@
+# Smoke uses stdlib only. Add requests/pandas when you extend the live ALFRED pull.
+# FRED_API_KEY is optional for the offline fixture path.

@@ -96,3 +96,22 @@ evidence, then clean up instrumentation once fixed.
   typecheck passes.
 - Note for the future: if "fetch failed" reappears, fully stop the stale dev server
   (check `lsof -ti tcp:2000`) instead of only Ctrl+C-ing the TUI.
+
+## 2026-08-14 — Make eve_for_fun stop producing dull economics tutorials
+
+### User request
+Diagnose and fix the tutorial generator so it stops producing dull heading-stamped economics tutorials. Replace 8-section template with fail-closed contract; fix writer/research/dedup/publish/evals; open PR.
+
+### What was dull
+- 8-section heading stamp in `econ_research_tutorial.md`
+- Writer allowed “pseudo-application” → fake policy_report.pdf / y~x1+x2
+- Research scored 1–10 on hypothetical use cases, not one real object
+- URL-only dedup; discoveries.json ephemeral on Vercel → goal-loop clone repos
+- publish_tutorial wrote only README.md; weekly_scan forced top 1–2 filler
+
+### Implemented
+- Fail-closed RELAI contract + publish rejection (`evals/tutorial_contract.ts`)
+- Technique-family dedup + GitHub-backed discovery log
+- publish_tutorial writes README + tutorial.py + requirements.txt + DATA_SOURCE.md
+- Gold example: `examples/gold/alfred-payroll-revisions/`
+- `npm test` gates for old template / toy OLS / no URL / no wrong number / draft-voice

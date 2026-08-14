@@ -1,3 +1,5 @@
+import { findNearMatch, techniqueFamily } from "#lib/technique_family.js";
+
 const GITHUB_API = "https://api.github.com";
 
 const FETCH_TIMEOUT_MS = 30_000;
@@ -9,7 +11,7 @@ const MAX_RETRIES = 3;
  * the whole publish step — that previously crashed the session and lost
  * the tutorial content.
  */
-async function githubFetch(url: string, init?: RequestInit): Promise<Response> {
+export async function githubFetch(url: string, init?: RequestInit): Promise<Response> {
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -38,7 +40,7 @@ async function githubFetch(url: string, init?: RequestInit): Promise<Response> {
   );
 }
 
-function githubHeaders(token: string, contentType = "application/json") {
+export function githubHeaders(token: string, contentType = "application/json") {
   return {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
@@ -53,6 +55,10 @@ function getToken(): string {
     throw new Error("Set GITHUB_TOKEN for GitHub publishing");
   }
   return token;
+}
+
+export function getTokenOptional(): string | undefined {
+  return process.env.GITHUB_TOKEN || undefined;
 }
 
 export function getGithubOwner(): string {
@@ -113,12 +119,116 @@ export async function createRepo(args: {
   return data;
 }
 
+/** List existing tutorial repos for the owner (paginated, prefix-filtered). */
+export async function listTutorialRepos(): Promise<string[]> {
+  const token = getTokenOptional();
+  if (!token) return [];
+
+  const owner = getGithubOwner();
+  const prefix = REPO_PREFIX();
+  const names: string[] = [];
+
+  for (let page = 1; page <= 10; page++) {
+    const res = await githubFetch(
+      `${GITHUB_API}/users/${owner}/repos?per_page=100&page=${page}&type=owner&sort=updated`,
+      { headers: githubHeaders(token, "") },
+    );
+    if (!res.ok) {
+      throw new Error(`GitHub list repos ${res.status}: ${await res.text()}`);
+    }
+    const batch = (await res.json()) as { name: string }[];
+    if (batch.length === 0) break;
+    for (const repo of batch) {
+      if (repo.name.startsWith(prefix)) names.push(repo.name);
+    }
+    if (batch.length < 100) break;
+  }
+
+  return names;
+}
+
+/**
+ * Resolve the repo to publish into.
+ * Near-match existing slugs → reuse (skip minting a clone). Exact slug wins first.
+ */
+export async function resolveTopicRepo(topic: string): Promise<{
+  repo: string;
+  created_name: string;
+  near_match: boolean;
+  near_match_of?: string;
+  action: "create" | "update" | "skip_duplicate_family";
+}> {
+  const createdName = topicToRepoName(topic);
+  const existing = await listTutorialRepos();
+
+  if (existing.includes(createdName)) {
+    return {
+      repo: createdName,
+      created_name: createdName,
+      near_match: false,
+      action: "update",
+    };
+  }
+
+  const near = findNearMatch(createdName, existing);
+  if (near) {
+    // Same technique family already has a public repo → update that repo, do not mint a clone.
+    return {
+      repo: near,
+      created_name: createdName,
+      near_match: true,
+      near_match_of: near,
+      action: "update",
+    };
+  }
+
+  // Also compare against technique families of existing repos.
+  const family = techniqueFamily(createdName);
+  const familyHit = existing.find((name) => techniqueFamily(name) === family);
+  if (familyHit) {
+    return {
+      repo: familyHit,
+      created_name: createdName,
+      near_match: true,
+      near_match_of: familyHit,
+      action: "update",
+    };
+  }
+
+  return {
+    repo: createdName,
+    created_name: createdName,
+    near_match: false,
+    action: "create",
+  };
+}
+
 export async function ensureTopicRepo(args: {
   topic: string;
   description: string;
-}): Promise<{ owner: string; repo: string; created: boolean; url: string }> {
+  /** When set, force publish into this repo name (near-match reuse). */
+  repoName?: string;
+}): Promise<{
+  owner: string;
+  repo: string;
+  created: boolean;
+  url: string;
+  near_match: boolean;
+  near_match_of?: string;
+}> {
   const owner = getGithubOwner();
-  const repo = topicToRepoName(args.topic);
+  const minted = topicToRepoName(args.topic);
+  const resolved = args.repoName
+    ? {
+        repo: args.repoName,
+        created_name: minted,
+        near_match: args.repoName !== minted,
+        near_match_of: args.repoName !== minted ? args.repoName : undefined,
+        action: "update" as const,
+      }
+    : await resolveTopicRepo(args.topic);
+
+  const repo = resolved.repo;
   const exists = await repoExists(owner, repo);
 
   if (!exists) {
@@ -127,10 +237,24 @@ export async function ensureTopicRepo(args: {
       name: repo,
       description: args.description,
     });
-    return { owner, repo, created: true, url: created.html_url };
+    return {
+      owner,
+      repo,
+      created: true,
+      url: created.html_url,
+      near_match: resolved.near_match,
+      near_match_of: resolved.near_match_of,
+    };
   }
 
-  return { owner, repo, created: false, url: `https://github.com/${owner}/${repo}` };
+  return {
+    owner,
+    repo,
+    created: false,
+    url: `https://github.com/${owner}/${repo}`,
+    near_match: resolved.near_match,
+    near_match_of: resolved.near_match_of,
+  };
 }
 
 interface PublishArgs {
@@ -174,4 +298,29 @@ export async function publishFileToGithub(args: PublishArgs) {
   }
 
   return res.json() as Promise<{ commit: { sha: string } }>;
+}
+
+/** Publish multiple files sequentially (GitHub Contents API is per-file). */
+export async function publishFilesToGithub(args: {
+  owner: string;
+  repo: string;
+  files: { path: string; content: string }[];
+  message: string;
+  branch?: string;
+}): Promise<{ shas: Record<string, string>; headSha: string }> {
+  const shas: Record<string, string> = {};
+  let headSha = "";
+  for (const file of args.files) {
+    const result = await publishFileToGithub({
+      owner: args.owner,
+      repo: args.repo,
+      path: file.path,
+      content: file.content,
+      message: `${args.message} [${file.path}]`,
+      branch: args.branch,
+    });
+    shas[file.path] = result.commit.sha;
+    headSha = result.commit.sha;
+  }
+  return { shas, headSha };
 }

@@ -7,7 +7,13 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "#*": ["./agent/*"],
+      "#evals/*": ["./evals/*"]
+    }
   },
-  "include": ["agent/**/*.ts", "evals/**/*.ts", ".eve/**/*.d.ts"]
+  "include": ["agent/**/*.ts", "evals/**/*.ts", ".eve/**/*.d.ts"],
+  "exclude": ["evals/**/*.test.ts"]
 }
