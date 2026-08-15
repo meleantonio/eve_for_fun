@@ -115,3 +115,18 @@ Diagnose and fix the tutorial generator so it stops producing dull heading-stamp
 - publish_tutorial writes README + tutorial.py + requirements.txt + DATA_SOURCE.md
 - Gold example: `examples/gold/alfred-payroll-revisions/`
 - `npm test` gates for old template / toy OLS / no URL / no wrong number / draft-voice
+
+## 2026-08-15 — Fix Vercel deployment failure on PR #1
+
+### User request
+@cursor this is not passing deployment checks on Vercel, have a look
+
+### Investigation
+- Failed deploy: `dpl_9Tac7CrCsuYW17ZK4GChuVydsx1Z` (Preview)
+- Local `VERCEL=1 eve build` succeeds; no Vercel credentials in this agent to pull remote logs
+- Likely cause: `package-lock.json` was rewritten during agent `npm install` and stripped `libc` markers from optional native deps (breaks Linux Vercel install)
+
+### Fix applied
+- Restored `package-lock.json` from `main`
+- Moved tutorial contract to `agent/lib/tutorial_contract.ts` (tools no longer import `#evals/*` at runtime)
+- Added `.nvmrc` (24) and `vercel.json` with `npm ci` + `npm run build`

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { topicToRepoName } from "#lib/github.js";
-import { evaluateTutorialContract } from "#evals/tutorial_contract.js";
+import { evaluateTutorialContract } from "#lib/tutorial_contract.js";
 
 function draftsDir(repoName: string): string {
   // Vercel's runtime filesystem is read-only outside /tmp.

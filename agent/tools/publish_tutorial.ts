@@ -9,7 +9,7 @@ import {
   resolveTopicRepo,
   topicToRepoName,
 } from "#lib/github.js";
-import { evaluateTutorialContract } from "#evals/tutorial_contract.js";
+import { evaluateTutorialContract } from "#lib/tutorial_contract.js";
 
 /** Best-effort local checkpoint so content survives a crash mid-publish. */
 async function checkpointDraft(
