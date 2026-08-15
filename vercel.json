@@ -1,0 +1,3 @@
+{
+  "buildCommand": "env -u VERCEL_DEPLOYMENT_ID npx eve build"
+}

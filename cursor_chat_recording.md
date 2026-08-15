@@ -130,3 +130,7 @@ Diagnose and fix the tutorial generator so it stops producing dull heading-stamp
 - Restored `package-lock.json` from `main`
 - Moved tutorial contract to `agent/lib/tutorial_contract.ts` (tools no longer import `#evals/*` at runtime)
 - Added `.nvmrc` (24) and `vercel.json` with `npm ci` + `npm run build`
+
+### Deploy root cause (confirmed)
+- With `VERCEL` + `VERCEL_DEPLOYMENT_ID`, eve@0.17.2 prewarms skills-seeded sandbox; failure exits 1 and aborts deploy.
+- Vercel eve framework runs `eve build` directly (ignores package.json scripts) — override via vercel.json buildCommand with `env -u VERCEL_DEPLOYMENT_ID`.
