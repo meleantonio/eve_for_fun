@@ -1,0 +1,3 @@
+{
+  "buildCommand": "npx eve build --skip-sandbox-prewarm"
+}

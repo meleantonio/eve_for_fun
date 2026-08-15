@@ -7,7 +7,7 @@
     "#evals/*": "./evals/*"
   },
   "scripts": {
-    "build": "env -u VERCEL_DEPLOYMENT_ID eve build",
+    "build": "eve build --skip-sandbox-prewarm",
     "dev": "eve dev",
     "start": "eve start",
     "typecheck": "tsc",
@@ -17,7 +17,7 @@
   "dependencies": {
     "@vercel/connect": "0.2.2",
     "ai": "^7.0.0",
-    "eve": "^0.17.2",
+    "eve": "0.38.3",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -30,5 +30,4 @@
   "engines": {
     "node": "24.x"
   }
-
 }
