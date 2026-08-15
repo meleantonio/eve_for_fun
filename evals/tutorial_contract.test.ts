@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import {
   evaluateTutorialContract,
   violationCodes,
-} from "./tutorial_contract.ts";
+} from "../agent/lib/tutorial_contract.ts";
 import { techniqueFamily, isNearDuplicate } from "../agent/lib/technique_family.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
