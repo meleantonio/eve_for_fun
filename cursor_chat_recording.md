@@ -134,3 +134,8 @@ Diagnose and fix the tutorial generator so it stops producing dull heading-stamp
 ### Deploy root cause (confirmed)
 - With `VERCEL` + `VERCEL_DEPLOYMENT_ID`, eve@0.17.2 prewarms skills-seeded sandbox; failure exits 1 and aborts deploy.
 - Vercel eve framework runs `eve build` directly (ignores package.json scripts) — override via vercel.json buildCommand with `env -u VERCEL_DEPLOYMENT_ID`.
+
+### Deploy fixed
+- Root cause: eve sandbox prewarm on hosted builds (skills seed a template) aborted Preview.
+- Fix: upgrade eve 0.17.2→0.38.3 + vercel.json buildCommand `npx eve build --skip-sandbox-prewarm`.
+- Vercel Preview check: pass (dpl via 4n4isfZHDfejYkMo1nFFgpjSSh7P).
