@@ -1,45 +1,58 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
-
-const LOG_PATH = join(process.cwd(), ".eve", "discoveries.json");
-
-type DiscoveryEntry = {
-  title: string;
-  url: string;
-  category: string;
-  relevance_score: number;
-  notes?: string;
-  recorded_at: string;
-};
+import { recordDiscovery } from "#lib/discoveries.js";
+import { techniqueFamily } from "#lib/technique_family.js";
 
 export default defineTool({
   description:
-    "Record a discovered AI technique to avoid duplicate tutorials across runs.",
+    "Record a discovered AI technique to the durable discovery log (GitHub-backed). Dedupes by URL and technique family so near-duplicate tutorials are not minted.",
   inputSchema: z.object({
     title: z.string(),
     url: z.string().url(),
     category: z.string(),
-    relevance_score: z.number().min(1).max(10),
+    relevance_score: z
+      .number()
+      .min(0)
+      .max(10)
+      .describe(
+        "0 unless real dataset + runnable primary source + not a near-duplicate; otherwise 1–10.",
+      ),
     notes: z.string().optional(),
+    primary_source_url: z
+      .string()
+      .url()
+      .optional()
+      .describe("Runnable primary source (paper PDF, docs, or repo) when score > 0"),
+    dataset_name: z
+      .string()
+      .optional()
+      .describe("Named real dataset/object required when score > 0"),
+    technique_family: z
+      .string()
+      .optional()
+      .describe("Optional override; defaults to normalized family from title"),
   }),
   async execute(entry) {
-    await mkdir(join(process.cwd(), ".eve"), { recursive: true });
+    const family = entry.technique_family?.trim() || techniqueFamily(entry.title);
 
-    let log: DiscoveryEntry[] = [];
-    try {
-      log = JSON.parse(await readFile(LOG_PATH, "utf-8")) as DiscoveryEntry[];
-    } catch {
-      /* first run */
+    if (entry.relevance_score > 0) {
+      if (!entry.dataset_name?.trim() || !entry.primary_source_url) {
+        return {
+          recorded: false,
+          duplicate: false,
+          near_duplicate: false,
+          technique_family: family,
+          total: 0,
+          durable: false,
+          reason:
+            "score>0 requires dataset_name + primary_source_url; use score 0 to log a reject",
+        };
+      }
     }
 
-    const duplicate = log.some((d) => d.url === entry.url);
-    if (!duplicate) {
-      log.push({ ...entry, recorded_at: new Date().toISOString() });
-      await writeFile(LOG_PATH, JSON.stringify(log, null, 2));
-    }
-
-    return { recorded: !duplicate, total: log.length, duplicate };
+    return recordDiscovery({
+      ...entry,
+      technique_family: family,
+    });
   },
 });

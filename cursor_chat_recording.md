@@ -96,3 +96,46 @@ evidence, then clean up instrumentation once fixed.
   typecheck passes.
 - Note for the future: if "fetch failed" reappears, fully stop the stale dev server
   (check `lsof -ti tcp:2000`) instead of only Ctrl+C-ing the TUI.
+
+## 2026-08-14 — Make eve_for_fun stop producing dull economics tutorials
+
+### User request
+Diagnose and fix the tutorial generator so it stops producing dull heading-stamped economics tutorials. Replace 8-section template with fail-closed contract; fix writer/research/dedup/publish/evals; open PR.
+
+### What was dull
+- 8-section heading stamp in `econ_research_tutorial.md`
+- Writer allowed “pseudo-application” → fake policy_report.pdf / y~x1+x2
+- Research scored 1–10 on hypothetical use cases, not one real object
+- URL-only dedup; discoveries.json ephemeral on Vercel → goal-loop clone repos
+- publish_tutorial wrote only README.md; weekly_scan forced top 1–2 filler
+
+### Implemented
+- Fail-closed RELAI contract + publish rejection (`evals/tutorial_contract.ts`)
+- Technique-family dedup + GitHub-backed discovery log
+- publish_tutorial writes README + tutorial.py + requirements.txt + DATA_SOURCE.md
+- Gold example: `examples/gold/alfred-payroll-revisions/`
+- `npm test` gates for old template / toy OLS / no URL / no wrong number / draft-voice
+
+## 2026-08-15 — Fix Vercel deployment failure on PR #1
+
+### User request
+@cursor this is not passing deployment checks on Vercel, have a look
+
+### Investigation
+- Failed deploy: `dpl_9Tac7CrCsuYW17ZK4GChuVydsx1Z` (Preview)
+- Local `VERCEL=1 eve build` succeeds; no Vercel credentials in this agent to pull remote logs
+- Likely cause: `package-lock.json` was rewritten during agent `npm install` and stripped `libc` markers from optional native deps (breaks Linux Vercel install)
+
+### Fix applied
+- Restored `package-lock.json` from `main`
+- Moved tutorial contract to `agent/lib/tutorial_contract.ts` (tools no longer import `#evals/*` at runtime)
+- Added `.nvmrc` (24) and `vercel.json` with `npm ci` + `npm run build`
+
+### Deploy root cause (confirmed)
+- With `VERCEL` + `VERCEL_DEPLOYMENT_ID`, eve@0.17.2 prewarms skills-seeded sandbox; failure exits 1 and aborts deploy.
+- Vercel eve framework runs `eve build` directly (ignores package.json scripts) — override via vercel.json buildCommand with `env -u VERCEL_DEPLOYMENT_ID`.
+
+### Deploy fixed
+- Root cause: eve sandbox prewarm on hosted builds (skills seed a template) aborted Preview.
+- Fix: upgrade eve 0.17.2→0.38.3 + vercel.json buildCommand `npx eve build --skip-sandbox-prewarm`.
+- Vercel Preview check: pass (dpl via 4n4isfZHDfejYkMo1nFFgpjSSh7P).

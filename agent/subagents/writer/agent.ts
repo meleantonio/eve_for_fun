@@ -2,6 +2,6 @@ import { defineAgent } from "eve";
 
 export default defineAgent({
   description:
-    "Write polished, runnable econ-focused AI tutorials from research briefs.",
+    "Draft fail-closed RELAI tutorials (named object, wrong-number naive path, runnable tutorial.py) — never pseudo-applications.",
   model: "openai/gpt-5.4-mini",
 });

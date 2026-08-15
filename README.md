@@ -1,14 +1,24 @@
 # Econ AI Scout
 
 A [Vercel Eve](https://vercel.com/eve) agent that scans the web for new AI techniques
-useful in economic research and publishes tutorials to your GitHub account.
+useful in economic research and publishes **fail-closed** tutorials to GitHub.
+
+## What changed (anti-dull)
+
+The generator used to stamp an 8-section brochure (Overview → … → References) and mint
+near-duplicate repos (`econ-ai-goal-loop-*`). It now refuses to publish unless the draft
+names a real empirical object, shows a naive path that fails with a **wrong number**,
+exposes RELAI, and ships `tutorial.py` + `requirements.txt` + `DATA_SOURCE.md`.
+
+Weekly scan: **at most one** tutorial; **zero** if nothing clears the bar.
 
 ## What it does
 
-- **Weekly scan** (Mondays 08:00 UTC): searches for recent AI tricks relevant to economists
-- **Research subagent**: evaluates reproducibility, use cases, and risks
-- **Writer subagent**: drafts runnable tutorials with Python examples
-- **GitHub publishing**: creates one repo per topic under `meleantonio/econ-ai-<topic-slug>`
+- **Weekly scan** (Mondays 08:00 UTC): search → research (score 0 unless real data + runnable source + not a near-duplicate) → optional publish
+- **Durable discovery log**: GitHub-backed (`meleantonio/econ-ai-scout-log` by default), not ephemeral Vercel cwd
+- **Technique-family dedup**: near-match slugs update the existing repo instead of cloning
+- **Contract gates**: `evals/tutorial_contract.ts` (enforced in `publish_tutorial`)
+- **Gold example**: `examples/gold/alfred-payroll-revisions/`
 
 ## Prerequisites
 
@@ -41,6 +51,13 @@ curl -X POST http://127.0.0.1:3000/eve/v1/session \
   -d '{"message":"Find one new AI trick for causal inference research and draft a tutorial."}'
 ```
 
+## Tests
+
+```bash
+npm test          # fail-closed contract + technique-family dedup
+npm run test:gold # smoke the gold tutorial.py
+```
+
 ## Environment variables
 
 | Variable | Required | Description |
@@ -49,8 +66,11 @@ curl -X POST http://127.0.0.1:3000/eve/v1/session \
 | `GITHUB_TOKEN` | Yes | Fine-grained PAT with repo create + contents write |
 | `GITHUB_OWNER` | No | GitHub username (default: `meleantonio`) |
 | `GITHUB_REPO_PREFIX` | No | Repo name prefix (default: `econ-ai-`) |
+| `DISCOVERY_LOG_REPO` | No | Durable discovery log repo (default: `econ-ai-scout-log`) |
+| `DISCOVERY_LOG_PATH` | No | File path inside that repo (default: `discoveries.json`) |
 
-Repo naming: topic `"LLM causal coding"` → `meleantonio/econ-ai-llm-causal-coding`
+Repo naming: topic `"ALFRED payroll vintages"` → `meleantonio/econ-ai-alfred-payroll-vintages`
+(near-match → update existing family repo instead).
 
 \* Or use `vercel link` and `vercel env pull` for OIDC on Vercel.
 
@@ -61,8 +81,9 @@ Repo naming: topic `"LLM causal coding"` → `meleantonio/econ-ai-llm-causal-cod
    - **Administration**: Read and write (required to create repos)
 2. Set `GITHUB_TOKEN=ghp_...` in `.env`.
 
-Each tutorial topic automatically gets its own repo, e.g.
-`https://github.com/meleantonio/econ-ai-structured-pdf-extraction`.
+Each **distinct technique family** gets a repo under `econ-ai-*`. Existing Antonio tutorial
+repos are left alone unless a near-match update intentionally targets them. Do not touch
+`AC4E_EIEF_Luiss` or `mrkfrm-chks`.
 
 For production with Vercel Connect (recommended for scheduled runs):
 
@@ -72,8 +93,6 @@ vercel connect create github --name github
 vercel connect attach <connector-uid> --yes
 vercel env pull
 ```
-
-The `agent/connections/github.ts` connection uses app-scoped auth so cron jobs work without a logged-in user.
 
 ## Deploy
 
@@ -87,17 +106,17 @@ The weekly schedule registers as a Vercel Cron Job automatically.
 
 ```text
 agent/
-├── instructions.md          # Scout persona and workflow
-├── agent.ts                 # Model config
-├── connections/github.ts    # GitHub OpenAPI via Vercel Connect
-├── schedules/weekly_scan.md # Monday morning cron
-├── skills/                  # Web research and tutorial writing playbooks
-├── tools/                   # publish_tutorial, record_discovery
-├── subagents/               # research + writer specialists
-└── lib/github.ts            # GitHub REST helpers
+├── instructions.md          # Scout persona (fail-closed)
+├── skills/                  # web_research + econ_research_tutorial (RELAI contract)
+├── tools/                   # publish_tutorial, record_discovery, save_draft
+├── subagents/               # research + writer
+└── lib/                     # github, discoveries, technique_family
+evals/
+├── tutorial_contract.ts     # publish-time gates
+├── tutorial_contract.test.ts
+└── fixtures/                # known-bad drafts the gates must reject
+examples/gold/               # one in-repo gold tutorial
 ```
-
-Tutorials are published as `README.md` in topic-specific repos: `meleantonio/econ-ai-<slug>`.
 
 ## Docs
 
