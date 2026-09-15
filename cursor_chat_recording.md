@@ -139,3 +139,33 @@ Diagnose and fix the tutorial generator so it stops producing dull heading-stamp
 - Root cause: eve sandbox prewarm on hosted builds (skills seed a template) aborted Preview.
 - Fix: upgrade eve 0.17.2→0.38.3 + vercel.json buildCommand `npx eve build --skip-sandbox-prewarm`.
 - Vercel Preview check: pass (dpl via 4n4isfZHDfejYkMo1nFFgpjSSh7P).
+
+## 2026-09-15 — Set up Cloud Agent dev environment (/env-setup)
+
+### User request
+Set up the development environment for this codebase, run the application(s), and demonstrate
+that the environment is working.
+
+### Diagnosis
+- No `.cursor/environment.json` existed; nothing was configured for Cloud Agents.
+- Base image ships Node 22, but eve requires Node >= 24 (`.nvmrc`/engines pin 24).
+- `/exec-daemon/node` (v22) shadows `node` only inside the agent tooling PATH; a real login
+  shell resolves Node via nvm, so environment commands that source nvm get Node 24.
+- `npm run test:gold` calls bare `python`; base image only provides `python3`.
+
+### Implemented
+- `.cursor/environment.json`: default image, `install` hook, `eve-dev` terminal, port 3000.
+- `.cursor/install.sh` (idempotent): `nvm install 24` + set default, `python-is-python3` shim
+  when missing, `npm ci`.
+- `.cursor/start-dev.sh`: `eve dev --no-ui --port 3000`, sourcing nvm for Node 24.
+- Reverted `eve dev`'s auto microsandbox churn in package.json/package-lock.json.
+
+### Verification (fresh login shell)
+- node v24.21.0, python 3.12.3
+- `eve info`: compile ready, 0 errors/0 warnings (2 skills, 3 tools, 2 subagents, 1 schedule)
+- `npm run typecheck`: PASS
+- `npm test`: 4/4 pass (fail-closed contract + dedup)
+- `npm run test:gold`: PASS (offline PAYEMS smoke)
+- `npm run build`: PASS (server built, 8.12 MB)
+- Live dev server `GET /eve/v1/health` → `{"ok":true,"status":"ready",...}` HTTP 200
+- Branch `cursor/setup-dev-environment-57f9`, PR #2.

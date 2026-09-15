@@ -1,0 +1,14 @@
+{
+  "name": "Econ AI Scout (eve agent)",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "eve-dev",
+      "command": "bash .cursor/start-dev.sh",
+      "description": "eve development server (HTTP API + agent runtime) on port 3000. Health: GET http://127.0.0.1:3000/eve/v1/health"
+    }
+  ],
+  "ports": [
+    { "name": "eve dev server", "port": 3000 }
+  ]
+}
