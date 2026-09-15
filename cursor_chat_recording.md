@@ -169,3 +169,26 @@ that the environment is working.
 - `npm run build`: PASS (server built, 8.12 MB)
 - Live dev server `GET /eve/v1/health` → `{"ok":true,"status":"ready",...}` HTTP 200
 - Branch `cursor/setup-dev-environment-57f9`, PR #2.
+
+## 2026-09-15 — Update to latest eve framework version
+
+### User request
+Update to the latest eve framework version.
+
+### Actions
+- Latest eve on npm: 0.55.0 (was 0.38.3). eve@0.55.0 peer-requires `ai ^7.0.93`
+  (installed ai was 7.0.9); other peers (dd-trace, just-bash, braintrust,
+  microsandbox, @opentelemetry/api) are optional.
+- Bumped `dependencies.eve` 0.38.3→0.55.0, `dependencies.ai` ^7.0.0→^7.0.102,
+  and `overrides.ai` ^7.0.0→^7.0.102. Regenerated lockfile on Linux.
+- Confirmed no `microsandbox` install churn (the two lockfile hits are eve's own
+  optional peer metadata); native optional deps kept os/cpu/libc markers.
+
+### Verification
+- `npm ci`: lockfile coherent with package.json.
+- `eve info`: v0.55.0, compile ready, 0 errors/0 warnings.
+- `npm run typecheck`: PASS
+- `npm test`: 4/4 pass; `npm run test:gold`: PASS
+- `npm run build`: PASS (9.37 MB)
+- Live dev server `GET /eve/v1/health` → 200 on v0.55.0
+- Branch `cursor/update-eve-latest-57f9` off `main`.

@@ -16,16 +16,17 @@
   },
   "dependencies": {
     "@vercel/connect": "0.2.2",
-    "ai": "^7.0.0",
-    "eve": "0.38.3",
+    "ai": "^7.0.102",
+    "eve": "0.55.0",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.x",
+    "microsandbox": "^0.5.10",
     "typescript": "7.0.1-rc"
   },
   "overrides": {
-    "ai": "^7.0.0"
+    "ai": "^7.0.102"
   },
   "engines": {
     "node": "24.x"
